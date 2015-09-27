@@ -8,83 +8,70 @@ output: html_document
 
 ### Background
 
-Exercise is generally measured in quantative terms such as distance ran, repetitions performed or count of steps. However the quality of exercise i.e. how well it was performed is more subjective and therefore usually not measured.
+Physical exercise is generally measured in quantative terms such as distance ran, repetitions performed or count of steps. However the quality of exercise i.e. how well it was performed is more subjective and therefore usually not measured.
 With the advent of personal body sensor devices such as Fitbit or Nike Fuel/Band it is now easy to collect biomechanical movement data that can be used to assess how well an exercise is being performed. 
 
 ### Objective
 
 In this study of supervised machine learning we are attempting to classify how well a bicep curl was performed based on biomechanical data collected from body sensors. This could be used to help someone train more effectively and reduce injury.
 
-
 ### Approach
 
-Weight lifting data from the Human Activity Recognition study (<http://groupware.les.inf.puc-rio.br/har>)
-was used to train a model using the "random forest" multi-class classification algorithm. The training data was split 60/40 to enable cross-validation and asses the out-of-sample error rate. This model was then used to classify how well a bicep curl was performed from a data-set of 20 test observations into one of 5 categories.
+Weight lifting data from the Human Activity Recognition study was used to train a model with the "random forest" multi-class classification algorithm. The source data sets were;
+
+`Training`: <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv> 
+
+`Test`: <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+The training data was split 60/40 to enable cross-validation and assess the out-of-sample error rate. This model was then used to classify how well a bicep curl was performed from a data-set of 20 test observations into one of 5 categories.
 
 The Random Forest algorithm is a decision tree algorithm that works by repeatedly subdividing the feature space to determine the best classifiers. This algorithm was chosen as it is a well-known multi-class classifier with a low memory footprint and good accuracy.
-
-The data was sourced from;
-
-* Training: <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
-* Test: <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
 
 *R version 3.2.2 (2015-08-14)*
 
 ```{r include=FALSE}
 # initialise environment
-library(caret);library(ggplot2);library(corrplot)
-library(randomForest)
+library(caret);library(ggplot2);library(corrplot);library(randomForest)
 ```
 
 ### Data Description
 
 * The training data set has `19622` observations by `160` variables.
-* `67` variables contain missing values. These variables only have values for a small fraction of the total observations).
+* `67` variables contain missing values. These variables only have values for a small fraction of the total observations.
 * `37` variables are of class "factor". These variables only have values for a small fraction of the total observations. 
 * The *outcome* variable for prediction is given as `"classe"` in column 160 in the training data set.
-* The test data set comprises 20 observations by 160 variables.
+* The test data set comprises `20` observations by `160` variables.
 
-####Training Data
+#### Training Data
 ```{r}
 dataTrain<-read.csv('Coursera/Machine Learning/pml-training.csv')
 dim(dataTrain)
 
-# column number of the outcome variable
+# find the column number of the outcome variable
 grep("classe",colnames(dataTrain))
 
-# categories of the outcome variable
+# show the categories of the outcome variable
 levels(dataTrain$classe)
 ```
 
 
 ```{r results="hide"}
-# show all variables that include missing values
+# show all variables that include missing values - result = 67
 m<-sapply(dataTrain,function(x) sum(is.na(x)));m[m>0];length(m[m>0])
-# example output (actual console output too large):
-## max_roll_belt           max_picth_belt            #min_roll_belt 
-## 19216                    19216                    19216 
-##....
-```
-
-```{r results="hide"}
-# show all variables that are non-numeric
+# show all variables that are non-numeric - result = 37
 n<-sapply(dataTrain,function(x) class(x));n[n=="factor"];length(n[n=="factor"])
-# example output (actual console output too large):
-## user_name          cvtd_timestamp              new_window 
-## "factor"                "factor"                "factor" 
-##....
 ```
 
-####Test Data
+#### Test Data
 ```{r}
 dataTest<-read.csv('Coursera/Machine Learning/pml-testing.csv')
 dim(dataTest)
 colnames(dataTest)[160]
 ```
 
-### Data Preparation
+### Training Data Preparation
 
-The aim of the data preparation was to exclude variables from the training data set that had little or no predictive value. There were five types of variables identified;
+The aim of the data preparation was to exclude variables from the training data set that had little or no predictive value. There were five types of these variables identified;
 
 * Variables that did not pertain to the accelerometer data and had `no obvious predictive value` (columns 1:7) e.g. person's name.
 *  Variables containing `missing values` - these were not imputed due to the significant number of observations with these values.
@@ -92,7 +79,7 @@ The aim of the data preparation was to exclude variables from the training data 
 * Variables that had `'near zero variability'`.
 * Variables that were `highly correlated` to other variables and therefore redundant.
 
-The following steps were taken to reduce the number of features;
+The following steps were taken to remove these variables;
 
 * *Step 1* - removed `7` variables that had no obvious predictive value; serial counter, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window.
 * *Step 2* - removed `67` variables that contained NA values.
@@ -100,7 +87,7 @@ The following steps were taken to reduce the number of features;
 * *Step 4* - check for any variables that have a 'near zero variability'; `none identified.`
 * *Step 5* - removed `7` variable that had a high correlation >0.9
 
->The final feature set comprised 45 variables
+>The final feature set for training the model comprised 45 variables
 
 ```{r}
 # step 1
@@ -127,69 +114,87 @@ nearZeroVar(d3,saveMetrics=TRUE)
 ```
 
 ```{r results="hide"}
-# step5 - remove any variables that have a high correlation 
+# step5 - remove variables that have a high correlation with each other 
 d4<-d3[,-findCorrelation(abs(cor(d3[,-53])),cutoff=0.90)]
-
-# step 6 - plot final feature selection as scaled correlation matrix
-d4.scale<-scale(d4[1:45],center=TRUE,scale=TRUE);
-cor.d4<-cor(d4.scale)
 ```
 
-
-####Scaled Correlation of Features
-
+##### Scaled Correlation of Final Feature Set
 ```{r results="hide",fig.width=8,fig.height=8}
+# plot final feature selection as scaled correlation matrix
+d4.scale<-scale(d4[1:45],center=TRUE,scale=TRUE);
+cor.d4<-cor(d4.scale)
 corrplot(cor.d4, order = "hclust")
 ```
 
-####Cross Validation
-The training data set was partitioned into two subsets; training 60% `(11776)` and validation 40% `(7846)`. This was to give an indication of how well the proposed model will generalise to the independent testing data set (*cross-validation*).
-
+#### Sub-Set the Training Data for *Cross Validation*
+The processed training data was partitioned into two subsets; training 60% `(11776)` and validation 40% `(7846)`. The validation set would provide an estimated  *out of sample* error that could be expected when the model was applied to the 'independent' test data.
 ```{r}
+set.seed(2015)
 inTrain<-createDataPartition(y=d4$classe,p=0.6,list=FALSE)
 training<-d4[inTrain,]
 validation<-d4[-inTrain,]
 ```
 
-####Model Fitting
-The Random Forest model was used based on the randomForest package.
-tunRF was used to find the best *mtry* value of `9`
-ntree was set to an odd number to break ties
+### Model Fitting
+The Random Forest model was used for prediction based on the *randomForest* package.
+The '*tunRF*' was used to find the best '*mtry*' value of `9` and '*ntree*' value was set to an odd number to break any voting ties.
+
+> The OOB estimated error rate of the model was calculated as `0.61%`.  
+> Based on *cross vaildation* we can expect an *out of sample* error rate of `0.73%`.
+
+```{r results="hide",fig.width=4,fig.height=4}
+# finding the best value to use for 'mtry' parameter in the 'Random Forest'
+set.seed(2015)
+bestmtry<-tuneRF(training[-46],training$classe,ntreeTry=100, 
+     stepFactor=1.5,improve=0.01,trace=FALSE,plot=TRUE,dobest=FALSE)
+```
+
 ```{r}
-bestmtry<-tuneRF(training[-46],training$classe, ntreeTry=100, 
-     stepFactor=1.5,improve=0.01, trace=TRUE, plot=TRUE, dobest=FALSE)
-
-fitRF<-randomForest(classe~.,data=training,mtry=9,ntree = 1501,
-                        keep.forest = TRUE, importance = TRUE, proximity = TRUE)
-
+# fit the model to the training data or model from file if available to save recalculating
+if(file.exists("RFobj.RData")){
+    load("RFobj.RData")
+} else {
+    set.seed(2015)
+    fitRF<-randomForest(classe~.,data=training,mtry=9,ntree=1501,
+                        keep.forest=TRUE,importance=TRUE, proximity=TRUE)
+    save(fitRF,file='RFobj.RData')
+}
+# check the estimated "OOB" error rate
+print(fitRF)
+# plot of variables by importance from the model
 varImpPlot(fitRF)
+```
 
+#### Cross Validation
+The trained model was next applied to the validation set to calculate the `out of sample` error rate.
+```{r}
 Predict<-predict(fitRF, validation)
-
+# determine the out of sample error usinf the validation data sub-set
 confusionMatrix(Predict, validation$classe)
 ```
 
-```{r echo=FALSE,fig.width=3.5,fig.height=3}
+### Predicting the Test Data Set using the Fitted Model
+Once the test data set has been prepared as per the training data set, the fitted model was applied and the predictions displayed.
 
-```
-
-####Applying Model to Test Data Set
-First step is to clean-up test data as per training data pre-processing steps
 ```{r}
+# remove variables from Test data set that were removed from training data aset
 cols<-names(training)
 t1 <- dataTest[, names(dataTest) %in% cols]
 t2<-cbind(t1[],dataTest[160])
+
+# apply prediction model to test data set
 Final <- predict(fitRF, t2)
+
+# display results of test case predictions
 Final
 ```
 
 
-
-
-####References
+###References
 Qualitative Activity Recognition of Weight Lifting Exercises
-Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
-URL: http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.  
+URL: http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf  
+http://groupware.les.inf.puc-rio.br/har
 
 Coursera MOOC - Practical Machine Learning, Jeff Leek, PhD, Roger D. Peng, PhD, Brian Caffo, PhD. URL: https://class.coursera.org/predmachlearn-032/wiki/syllabus
 

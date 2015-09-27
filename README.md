@@ -1,2 +1,2 @@
-# Coursera-Machine-Learning
-Coursera Machine Learning
+# Practical Machine Learning
+Final Project Write-Up
